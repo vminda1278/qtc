@@ -1,0 +1,442 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: qwiktax
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: qwiktax
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: qwiktax
+
+package:
+  exclude:
+    - .env
+    - .env.*
+    - .env.example
+    - .env.local
+    - .env.backup
+    - node_modules/.cache/**
+    - test/**
+    - docs/**
+    - scripts/**
+    - "*.md"
+    - .git/**
+    - .gitignore
+    - .DS_Store
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'vikas'}
+  profile: beejcap-aws
+  region: ap-south-1
+  environment:
+    # DynamoDB Table
+    DYNAMODB_TABLE: qwiktax_${self:provider.stage}
+    # Cognito Configuration - Dynamic based on stage
+    COGNITO_USER_POOL_ID: 
+      Ref: CognitoUserPoolMyUserPool1
+    COGNITO_CLIENT_ID:
+      Ref: CognitoUserPoolClient
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_ISSUER:
+      Fn::Join:
+        - ""
+        - - "https://cognito-idp."
+          - ${self:provider.region}
+          - ".amazonaws.com/"
+          - Ref: CognitoUserPoolMyUserPool1
+    # SNS Platform Applications for Push Notifications (set via environment variables)
+    SNS_PLATFORM_APPLICATION_IOS: ${env:SNS_PLATFORM_APPLICATION_IOS, ''}
+    SNS_PLATFORM_APPLICATION_IOS_SANDBOX: ${env:SNS_PLATFORM_APPLICATION_IOS_SANDBOX, ''}
+    SNS_PLATFORM_APPLICATION_ANDROID: ${env:SNS_PLATFORM_APPLICATION_ANDROID, ''}
+    # Stage and Region
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    # JWT Secret for OTP-based authentication
+    JWT_SECRET: ${env:JWT_SECRET, 'qwiktax-jwt-secret-${self:provider.stage}-2025'}
+    # Logging Configuration
+    LOG_LEVEL: ${env:LOG_LEVEL, self:custom.logLevels.${self:provider.stage}, 'INFO'}
+    SERVICE_NAME: lsp-oms
+    ENABLE_REQUEST_LOGGING: true
+    # Custom Domain Configuration
+    API_DOMAIN: ${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.ai'}
+    API_BASE_URL: https://${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.ai'}
+  iam:
+    role:
+      name: qwiktax-${opt:stage, self:provider.stage}-role
+      statements:
+        - Effect: "Allow" # xray permissions (required)
+          Action:
+            - "xray:PutTraceSegments"
+            - "xray:PutTelemetryRecords"
+          Resource:
+            - "*"
+        - Effect: "Allow"
+          Action: ["dynamodb:*"]
+          Resource: "*"
+        - Effect: "Allow"
+          Action:
+            ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+          Resource: "*"
+        - Effect: "Allow" # Allow SNS actions for push notifications
+          Action:
+            - "sns:Publish"
+            - "sns:CreatePlatformEndpoint"
+            - "sns:DeleteEndpoint"
+            - "sns:GetEndpointAttributes"
+            - "sns:SetEndpointAttributes"
+            - "sns:ListEndpointsByPlatformApplication"
+            - "sns:CreatePlatformApplication"
+            - "sns:GetPlatformApplicationAttributes"
+            - "sns:SetPlatformApplicationAttributes"
+            - "sns:ListPlatformApplications"
+          Resource: "*" # Adjust this to specify particular SNS resources if necessary  
+        - Effect: "Allow" # Allow all actions on all Cognito resources
+          Action:
+            - "cognito-idp:*"
+          Resource: "*"  
+        - Effect: "Allow" # Allow all actions on all Cognito resources
+          Action:
+            - "ses:*"
+          Resource: "*"    
+  httpApi:        
+    # Authorizers removed - all authentication handled by Express middleware
+    # authorizers:
+    #   qwiktaxJwtAuthorizer:
+    #     type: jwt
+    #     identitySource: $request.header.Authorization
+    #     issuerUrl: 
+    #       Fn::Join:
+    #       - ""
+    #       - - "https://cognito-idp."
+    #         - ${self:provider.region}
+    #         - ".amazonaws.com/"
+    #         - Ref: CognitoUserPoolMyUserPool1
+    #     audience:
+    #       - Ref: CognitoUserPoolClient         
+functions: ${self:custom.functions.${self:provider.stage}}
+
+resources:
+  Resources:
+    appTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: qwiktax_${self:provider.stage}
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: PK1
+            AttributeType: S
+          - AttributeName: SK1
+            AttributeType: S
+          - AttributeName: PK2
+            AttributeType: S
+          - AttributeName: SK2
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: PK1
+                KeyType: HASH
+              - AttributeName: SK1
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: PK2
+                KeyType: HASH
+              - AttributeName: SK2
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+    CognitoUserPoolMyUserPool1:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: qwiktaxUserPool_${self:provider.stage}
+        Schema:
+          - Name: email
+            Required: true
+            Mutable: false
+            AttributeDataType: String
+          - Name: isConfirmedByAdmin
+            Required: false
+            Mutable: true
+            AttributeDataType: Boolean
+            DeveloperOnlyAttribute: false  
+          - Name: role
+            Required: false
+            Mutable: true
+            AttributeDataType: String
+            DeveloperOnlyAttribute: false    
+          - Name: enterpriseType
+            Required: false
+            Mutable: true
+            AttributeDataType: String   
+          - Name: eid
+            Required: false
+            Mutable: true
+            AttributeDataType: String     
+        AutoVerifiedAttributes:
+          - email
+        EmailConfiguration:
+          EmailSendingAccount: DEVELOPER  
+          SourceArn: arn:aws:ses:ap-south-1:347803923597:identity/qwiktax.ai
+          From: The qwiktax Team <hello@qwiktax.ai>
+        VerificationMessageTemplate:
+          DefaultEmailOption: CONFIRM_WITH_CODE
+          EmailMessage: | 
+            Welcome to qwiktax!<br/><br/> 
+            Your verification code is : {####}.<br/><br/>
+            Please use this code to complete your account verification.<br/><br/>
+            Thank You,<br/>
+            The qwiktax Team<br/>
+          EmailSubject: "[Action Required] Your account verification code"
+          # Optional: If you also want to customize SMS messages
+          SmsMessage: "Welcome to qwiktax! Your verification code is {####}."  
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: qwiktaxUserPoolClient_${self:provider.stage}
+        UserPoolId:
+          Ref: CognitoUserPoolMyUserPool1
+        ExplicitAuthFlows:
+          - ALLOW_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+
+    # SNS Topic for general notifications
+    SNSNotificationTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: qwiktax-notifications-${self:provider.stage}
+        DisplayName: LSP-OMS Notifications
+
+  Outputs:
+    # DynamoDB Table
+    DynamoDBTableName:
+      Description: "DynamoDB table name"
+      Value:
+        Ref: appTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DynamoDBTableName
+
+    # Cognito User Pool
+    CognitoUserPoolId:
+      Description: "Cognito User Pool ID"
+      Value:
+        Ref: CognitoUserPoolMyUserPool1
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CognitoUserPoolId
+
+    CognitoUserPoolClientId:
+      Description: "Cognito User Pool Client ID"
+      Value:
+        Ref: CognitoUserPoolClient
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CognitoUserPoolClientId
+
+    SNSNotificationTopicArn:
+      Description: "SNS Topic ARN for notifications"
+      Value:
+        Ref: SNSNotificationTopic
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SNSNotificationTopicArn
+
+plugins: ${self:custom.plugins.${self:provider.stage}}
+
+custom:
+  # Stage-specific plugins
+  plugins:
+    vikas: [] # No plugins for vikas stage
+    dev: 
+      - serverless-domain-manager
+    prod: 
+      - serverless-domain-manager
+    staging: 
+      - serverless-domain-manager
+    test: 
+      - serverless-domain-manager
+  
+  # Stage-specific functions
+  functions:
+    vikas: ${self:custom.allFunctions} # Enable functions for vikas stage
+    dev: ${self:custom.allFunctions}
+    prod: ${self:custom.allFunctions}
+    staging: ${self:custom.allFunctions}
+    test: ${self:custom.allFunctions}
+  
+  # All functions definition
+  allFunctions:
+    PreTokenGeneration:
+      handler: app.preTokenGenerationHandler
+    api:
+      handler: app.handler
+      events:
+        # Public auth endpoints
+        - httpApi:
+            path: /v1/auth/signup
+            method: post
+        - httpApi:
+            path: /v1/auth/login
+            method: post
+        - httpApi:
+            path: /v1/auth/confirm
+            method: post
+        - httpApi:
+            path: /v1/auth/forgot-password
+            method: post
+        - httpApi:
+            path: /v1/auth/confirm-forgot-password
+            method: post
+        - httpApi:
+            path: /v1/auth/resend-code
+            method: post
+        - httpApi:
+            path: /v1/auth/validate-token
+            method: post
+        # OTP-based auth endpoints (for riders)
+        - httpApi:
+            path: /v1/auth/sendOTP
+            method: post
+        - httpApi:
+            path: /v1/auth/verifyOTP
+            method: post
+        
+        # Public endpoints
+        - httpApi:
+            path: /v1/public/getAllLsp
+            method: get
+        
+        # LSP Routes (authenticated via Express middleware)
+        - httpApi:
+            path: /v1/lsp/getAllRiders
+            method: get
+        - httpApi:
+            path: /v1/lsp/getNearbyActiveRiders
+            method: get
+        - httpApi:
+            path: /v1/lsp/getRecentOrders
+            method: get
+        - httpApi:
+            path: /v1/lsp/configureServiceability
+            method: post
+        - httpApi:
+            path: /v1/lsp/configureWebhook
+            method: post
+        - httpApi:
+            path: /v1/lsp/validateServiceability
+            method: post
+        - httpApi:
+            path: /v1/lsp/checkServiceability
+            method: post
+        - httpApi:
+            path: /v1/lsp/createOrder
+            method: post
+        - httpApi:
+            path: /v1/lsp/track/{tracking_id}
+            method: get
+        - httpApi:
+            path: /v1/lsp/orders/{tracking_id}/cancel
+            method: post
+            
+        # Rider Routes (authenticated via Express middleware)
+        - httpApi:
+            path: /v1/rider/status
+            method: post
+        - httpApi:
+            path: /v1/rider/order
+            method: post
+        - httpApi:
+            path: /v1/rider/get_my_assigned_orders
+            method: get
+        - httpApi:
+            path: /v1/rider/order/{id}
+            method: get
+        - httpApi:
+            path: /v1/rider/update_order_status
+            method: post
+        - httpApi:
+            path: /v1/rider/gps_update
+            method: post
+        - httpApi:
+            path: /v1/rider/register-device
+            method: post
+        - httpApi:
+            path: /v1/rider/get_new_order
+            method: post
+            
+        # Admin Routes (no authentication)
+        - httpApi:
+            path: /v1/admin/confirmuserSignup
+            method: post
+        - httpApi:
+            path: /v1/admin/deleteEnterprise
+            method: post
+        - httpApi:
+            path: /v1/admin/getAllEnterprises
+            method: get
+        - httpApi:
+            path: /v1/admin/info
+            method: get
+        
+        # Webhook Routes (typically no auth required for external webhooks)
+        - httpApi:
+            path: /v1/webhook/orders/{tracking_id}/status
+            method: post
+  
+  # Exclude functions, events for vikas stage
+  excludeVikas: ${strToBool(${self:custom.stageConfig.${self:provider.stage}.excludeResources, false})}
+  
+  # Stage-specific configuration
+  stageConfig:
+    vikas:
+      excludeResources: false
+    dev:
+      excludeResources: false
+    prod:
+      excludeResources: false
+    staging:
+      excludeResources: false
+    test:
+      excludeResources: false
+  
+  customDomain:
+    domainName: ${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.ai'}
+    stage: ${self:provider.stage}
+    basePath: ''
+    certificateName: '*.qwiktax.ai'
+    createRoute53Record: false
+    endpointType: 'regional'
+    securityPolicy: tls_1_2
+    apiType: http
+    autoDomain: false
+    enabled: ${strToBool(${self:custom.stageConfig.${self:provider.stage}.excludeResources, false})}
+  
+  # Log levels per stage
+  logLevels:
+    dev: DEBUG
+    staging: INFO
+    prod: WARN
+    vikas: DEBUG
+    test: DEBUG
+  
+  domainMapping:
+    dev: devapi.qwiktax.ai
+    prod: api.qwiktax.ai
+    # Add more stages as needed
+    staging: stagingapi.qwiktax.ai
+    test: testapi.qwiktax.ai
