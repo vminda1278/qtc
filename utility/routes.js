@@ -25,8 +25,10 @@ superadminRouter.post('/deleteEnterprise', superadminController.deleteEnterprise
 superadminRouter.get('/getAllEnterprises', superadminController.getAllEnterprises);
 
 // Admin routes
-adminRouter.post('/saveSiteSettings', adminController.saveSiteSettings);
-adminRouter.get('/getSiteSettings', adminController.getSiteSettings);
+adminRouter.post('/saveDraftSiteSettings', adminController.saveDraftSiteSettings);
+adminRouter.get('/getDraftSiteSettings', adminController.getDraftSiteSettings);
+adminRouter.post('/publishSiteSettings', adminController.publishSiteSettings);
+adminRouter.get('/getLiveSiteSettings', adminController.getLiveSiteSettings);
 
 
 // Root router - Just add an info endpoint

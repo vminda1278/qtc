@@ -395,10 +395,16 @@ custom:
         
         # Admin Routes (authenticated via Express middleware)
         - httpApi:
-            path: /v1/admin/saveSiteSettings
+            path: /v1/admin/saveDraftSiteSettings
             method: post
         - httpApi:
-            path: /v1/admin/getSiteSettings
+            path: /v1/admin/getDraftSiteSettings
+            method: get
+        - httpApi:
+            path: /v1/admin/publishSiteSettings
+            method: post
+        - httpApi:
+            path: /v1/admin/getLiveSiteSettings
             method: get
         
         # Webhook Routes (typically no auth required for external webhooks)

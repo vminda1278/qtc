@@ -1,12 +1,12 @@
-const { saveSiteSettingsModel, getSiteSettingsModel } = require('../model/admin');
+const { saveDraftSiteSettingsModel, getDraftSiteSettingsModel, publishSiteSettingsModel, getLiveSiteSettingsModel } = require('../model/admin');
 const express = require('express');
 
 const dotenv = require("dotenv");
 dotenv.config();
 
 /**
- * Save site settings for an enterprise
- * POST /v1/admin/saveSiteSettings
+ * Save draft site settings for an enterprise
+ * POST /v1/admin/saveDraftSiteSettings
  * 
  * Expected body:
  * {
@@ -14,9 +14,9 @@ dotenv.config();
  *   siteSettings: { ...settings data... }
  * }
  */
-const saveSiteSettings = async (req, res, next) => {
+const saveDraftSiteSettings = async (req, res, next) => {
     try {
-        console.log('[DEBUG] saveSiteSettings request body:', JSON.stringify(req.body, null, 2));
+        console.log('[DEBUG] saveDraftSiteSettings request body:', JSON.stringify(req.body, null, 2));
 
         if (!req.body || !req.body.email) {
             return res.status(400).json({
@@ -34,11 +34,11 @@ const saveSiteSettings = async (req, res, next) => {
 
         const { email, siteSettings } = req.body;
 
-        await saveSiteSettingsModel({ email, siteSettings });
+        await saveDraftSiteSettingsModel({ email, siteSettings });
 
         res.status(200).json({
             status: 'success',
-            message: 'Site settings saved successfully',
+            message: 'Draft site settings saved successfully',
             data: {
                 email,
                 savedAt: new Date().toISOString()
@@ -46,23 +46,23 @@ const saveSiteSettings = async (req, res, next) => {
         });
 
     } catch (e) {
-        console.error('Error in saveSiteSettings:', e);
+        console.error('Error in saveDraftSiteSettings:', e);
         const statusCode = e.$metadata && e.$metadata.httpStatusCode ? e.$metadata.httpStatusCode : 500;
         res.status(statusCode).json({
             status: 'error',
-            message: e.message || 'Failed to save site settings'
+            message: e.message || 'Failed to save draft site settings'
         });
         next(e);
     }
 };
 
 /**
- * Get site settings for an enterprise
- * GET /v1/admin/getSiteSettings?email=enterprise@example.com
+ * Get draft site settings for an enterprise
+ * GET /v1/admin/getDraftSiteSettings?email=enterprise@example.com
  */
-const getSiteSettings = async (req, res, next) => {
+const getDraftSiteSettings = async (req, res, next) => {
     try {
-        console.log('[DEBUG] getSiteSettings query params:', req.query);
+        console.log('[DEBUG] getDraftSiteSettings query params:', req.query);
 
         const { email } = req.query;
 
@@ -73,12 +73,12 @@ const getSiteSettings = async (req, res, next) => {
             });
         }
 
-        const siteSettings = await getSiteSettingsModel({ email });
+        const siteSettings = await getDraftSiteSettingsModel({ email });
 
         if (!siteSettings) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Site settings not found for this enterprise'
+                message: 'Draft site settings not found for this enterprise'
             });
         }
 
@@ -88,11 +88,114 @@ const getSiteSettings = async (req, res, next) => {
         });
 
     } catch (e) {
-        console.error('Error in getSiteSettings:', e);
+        console.error('Error in getDraftSiteSettings:', e);
         const statusCode = e.$metadata && e.$metadata.httpStatusCode ? e.$metadata.httpStatusCode : 500;
         res.status(statusCode).json({
             status: 'error',
-            message: e.message || 'Failed to get site settings'
+            message: e.message || 'Failed to get draft site settings'
+        });
+        next(e);
+    }
+};
+
+/**
+ * Publish site settings for an enterprise (make them live)
+ * POST /v1/admin/publishSiteSettings
+ * 
+ * Expected body:
+ * {
+ *   email: "enterprise@example.com",
+ *   domain: "example.com",
+ *   siteSettings: { ...settings data... }
+ * }
+ */
+const publishSiteSettings = async (req, res, next) => {
+    try {
+        console.log('[DEBUG] publishSiteSettings request body:', JSON.stringify(req.body, null, 2));
+
+        if (!req.body || !req.body.email) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'email is required in request body'
+            });
+        }
+
+        if (!req.body.domain) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'domain is required in request body'
+            });
+        }
+
+        if (!req.body.siteSettings || typeof req.body.siteSettings !== 'object') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'siteSettings must be a valid object in request body'
+            });
+        }
+
+        const { email, domain, siteSettings } = req.body;
+
+        await publishSiteSettingsModel({ email, domain, siteSettings });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Site settings published successfully',
+            data: {
+                email,
+                domain,
+                publishedAt: new Date().toISOString()
+            }
+        });
+
+    } catch (e) {
+        console.error('Error in publishSiteSettings:', e);
+        const statusCode = e.$metadata && e.$metadata.httpStatusCode ? e.$metadata.httpStatusCode : 500;
+        res.status(statusCode).json({
+            status: 'error',
+            message: e.message || 'Failed to publish site settings'
+        });
+        next(e);
+    }
+};
+
+/**
+ * Get live site settings for an enterprise
+ * GET /v1/admin/getLiveSiteSettings?email=enterprise@example.com
+ */
+const getLiveSiteSettings = async (req, res, next) => {
+    try {
+        console.log('[DEBUG] getLiveSiteSettings query params:', req.query);
+
+        const { email } = req.query;
+
+        if (!email) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'email is required as query parameter'
+            });
+        }
+
+        const siteSettings = await getLiveSiteSettingsModel({ email });
+
+        if (!siteSettings) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Live site settings not found for this enterprise'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: siteSettings
+        });
+
+    } catch (e) {
+        console.error('Error in getLiveSiteSettings:', e);
+        const statusCode = e.$metadata && e.$metadata.httpStatusCode ? e.$metadata.httpStatusCode : 500;
+        res.status(statusCode).json({
+            status: 'error',
+            message: e.message || 'Failed to get live site settings'
         });
         next(e);
     }
@@ -101,11 +204,15 @@ const getSiteSettings = async (req, res, next) => {
 // Create Express router
 const adminRouter = express.Router();
 
-adminRouter.post('/saveSiteSettings', saveSiteSettings);
-adminRouter.get('/getSiteSettings', getSiteSettings);
+adminRouter.post('/saveDraftSiteSettings', saveDraftSiteSettings);
+adminRouter.get('/getDraftSiteSettings', getDraftSiteSettings);
+adminRouter.post('/publishSiteSettings', publishSiteSettings);
+adminRouter.get('/getLiveSiteSettings', getLiveSiteSettings);
 
 module.exports = {
-    saveSiteSettings,
-    getSiteSettings,
+    saveDraftSiteSettings,
+    getDraftSiteSettings,
+    publishSiteSettings,
+    getLiveSiteSettings,
     adminRouter
 };
