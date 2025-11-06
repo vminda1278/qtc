@@ -407,6 +407,11 @@ custom:
             path: /v1/admin/getLiveSiteSettings
             method: get
         
+        # Public Routes (unauthenticated - for site lookup)
+        - httpApi:
+            path: /v1/public/site/{subdomain}
+            method: get
+        
         # Webhook Routes (typically no auth required for external webhooks)
         - httpApi:
             path: /v1/webhook/orders/{tracking_id}/status

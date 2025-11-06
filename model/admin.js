@@ -81,26 +81,26 @@ async function getDraftSiteSettingsModel({ email }) {
  * 
  * @param {Object} params - Function parameters
  * @param {string} params.email - Enterprise email
- * @param {string} params.domain - Domain name for the site
+ * @param {string} params.subdomain - Subdomain name (e.g., "brighttax")
  * @param {Object} params.siteSettings - Site settings data to publish
  * @returns {Promise<Object>} - DynamoDB response
  * @throws {Error} If required parameters are missing or save fails
  */
-async function publishSiteSettingsModel({ email, domain, siteSettings }) {
+async function publishSiteSettingsModel({ email, subdomain, siteSettings }) {
     try {
         if (!email) {
             throw new Error("email is required");
         }
 
-        if (!domain) {
-            throw new Error("domain is required");
+        if (!subdomain) {
+            throw new Error("subdomain is required");
         }
 
         if (!siteSettings || typeof siteSettings !== 'object') {
             throw new Error("siteSettings must be a valid object");
         }
 
-        console.log('[DEBUG] Publishing live site settings for email:', email, 'domain:', domain);
+        console.log('[DEBUG] Publishing live site settings for email:', email, 'subdomain:', subdomain);
 
         // Prepare transaction items to write to both locations
         const transactItems = [
@@ -115,9 +115,10 @@ async function publishSiteSettingsModel({ email, domain, siteSettings }) {
             {
                 op: "add",
                 pk: "LiveSites",
-                sk: domain,
+                sk: subdomain,
                 attr: {
-                    ATTR1: siteSettings
+                    ATTR1: siteSettings,
+                    ATTR2: email // Store email for reference
                 }
             }
         ];
@@ -172,25 +173,26 @@ async function getLiveSiteSettingsModel({ email }) {
 }
 
 /**
- * Get site settings by domain name (public lookup)
+ * Get site settings by subdomain (public lookup)
+ * Subdomain is extracted from full domain (e.g., "brighttax" from "brighttax.qwiktax.in")
  * 
  * @param {Object} params - Function parameters
- * @param {string} params.domain - Domain name
+ * @param {string} params.subdomain - Subdomain name (e.g., "brighttax")
  * @returns {Promise<Object>} - Site settings data
  * @throws {Error} If required parameters are missing or get fails
  */
-async function getSiteSettingsByDomainModel({ domain }) {
+async function getSiteSettingsBySubdomainModel({ subdomain }) {
     try {
-        if (!domain) {
-            throw new Error("domain is required");
+        if (!subdomain) {
+            throw new Error("subdomain is required");
         }
 
         const params = {
             pk: "LiveSites",
-            sk: domain
+            sk: subdomain
         };
 
-        console.log('[DEBUG] Getting site settings by domain:', JSON.stringify(params, null, 2));
+        console.log('[DEBUG] Getting site settings by subdomain:', JSON.stringify(params, null, 2));
         
         const response = await getItem(params);
         
@@ -198,12 +200,12 @@ async function getSiteSettingsByDomainModel({ domain }) {
             return null;
         }
 
-        console.log('[DEBUG] Site settings retrieved successfully for domain:', domain);
+        console.log('[DEBUG] Site settings retrieved successfully for subdomain:', subdomain);
         return response.Item.ATTR1;
 
     } catch (e) {
-        console.error('Error in getSiteSettingsByDomainModel:', e);
-        throw new Error(e.message || 'Failed to get site settings by domain');
+        console.error('Error in getSiteSettingsBySubdomainModel:', e);
+        throw new Error(e.message || 'Failed to get site settings by subdomain');
     }
 }
 
@@ -212,5 +214,5 @@ module.exports = {
     getDraftSiteSettingsModel,
     publishSiteSettingsModel,
     getLiveSiteSettingsModel,
-    getSiteSettingsByDomainModel
+    getSiteSettingsBySubdomainModel
 };

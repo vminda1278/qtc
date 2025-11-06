@@ -105,7 +105,7 @@ const getDraftSiteSettings = async (req, res, next) => {
  * Expected body:
  * {
  *   email: "enterprise@example.com",
- *   domain: "example.com",
+ *   subdomain: "brighttax",
  *   siteSettings: { ...settings data... }
  * }
  */
@@ -120,10 +120,10 @@ const publishSiteSettings = async (req, res, next) => {
             });
         }
 
-        if (!req.body.domain) {
+        if (!req.body.subdomain) {
             return res.status(400).json({
                 status: 'error',
-                message: 'domain is required in request body'
+                message: 'subdomain is required in request body'
             });
         }
 
@@ -134,16 +134,16 @@ const publishSiteSettings = async (req, res, next) => {
             });
         }
 
-        const { email, domain, siteSettings } = req.body;
+        const { email, subdomain, siteSettings } = req.body;
 
-        await publishSiteSettingsModel({ email, domain, siteSettings });
+        await publishSiteSettingsModel({ email, subdomain, siteSettings });
 
         res.status(200).json({
             status: 'success',
             message: 'Site settings published successfully',
             data: {
                 email,
-                domain,
+                subdomain,
                 publishedAt: new Date().toISOString()
             }
         });
