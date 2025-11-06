@@ -7,7 +7,8 @@ const publicController = require('../controller/public-controller');
 // Create a simple router for the root path
 const superadminRouter = express.Router();
 const authRouter = express.Router();
-const adminRouter = express.Router();
+// Use adminRouter from admin-controller (includes JWT middleware)
+const adminRouter = adminController.adminRouter;
 const publicRouter = express.Router();
 
 // Retailer router removed; all endpoints consolidated under LSP router
@@ -21,16 +22,14 @@ authRouter.post('/resend-code', authController.resendVerificationCode);
 authRouter.post('/sendOTP', authController.sendUserOTP);
 authRouter.post('/verifyOTP', authController.verifyUserOTP);
 authRouter.post('/validate-token', authController.validateAWSToken);
+authRouter.post('/google', authController.googleOAuth);
 
 superadminRouter.post('/confirmuserSignup', superadminController.adminConfirmUserSignUp);
 superadminRouter.post('/deleteEnterprise', superadminController.deleteEnterprise);
 superadminRouter.get('/getAllEnterprises', superadminController.getAllEnterprises);
 
-// Admin routes
-adminRouter.post('/saveDraftSiteSettings', adminController.saveDraftSiteSettings);
-adminRouter.get('/getDraftSiteSettings', adminController.getDraftSiteSettings);
-adminRouter.post('/publishSiteSettings', adminController.publishSiteSettings);
-adminRouter.get('/getLiveSiteSettings', adminController.getLiveSiteSettings);
+// Admin routes - already configured in admin-controller with JWT middleware
+// No need to redefine routes here, they're already in adminRouter
 
 // Public routes (unauthenticated)
 publicRouter.get('/site/:subdomain', publicController.getSiteBySubdomain);

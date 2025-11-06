@@ -960,8 +960,132 @@ const validateAWSToken = async (req, res, next) => {
       return res.status(500).json({ status: 'error', message: 'Internal Server Error' });
     }
   };
+
+/**
+ * Google OAuth - Exchange authorization code for user info and generate JWT
+ * POST /v1/auth/google
+ * 
+ * Expected body:
+ * {
+ *   code: "4/0AeaY...", // Google authorization code
+ * }
+ * 
+ * Returns:
+ * {
+ *   status: 'success',
+ *   token: 'eyJhbGc...', // JWT token
+ *   user: {
+ *     email: 'user@gmail.com',
+ *     name: 'John Doe',
+ *     picture: 'https://...'
+ *   }
+ * }
+ */
+const googleOAuth = async (req, res, next) => {
+  try {
+    const { code } = req.body;
+
+    if (!code) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Authorization code is required'
+      });
+    }
+
+    console.log('[Google OAuth] Received code:', code.substring(0, 20) + '...');
+
+    // Check for required environment variables
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      console.error('[Google OAuth] Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET in environment variables');
+      return res.status(500).json({
+        status: 'error',
+        message: 'Server configuration error: Google OAuth credentials not configured'
+      });
+    }
+
+    // Exchange authorization code for access token
+    const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+      code,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/callback',
+      grant_type: 'authorization_code'
+    });
+
+    const { access_token } = tokenResponse.data;
+    console.log('[Google OAuth] Successfully exchanged code for access token');
+
+    // Get user info from Google
+    const userInfoResponse = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        Authorization: `Bearer ${access_token}`
+      }
+    });
+
+    const userInfo = userInfoResponse.data;
+    console.log('[Google OAuth] User info retrieved:', {
+      email: userInfo.email,
+      name: userInfo.name,
+      verified: userInfo.verified_email
+    });
+
+    // Verify email is present and verified
+    if (!userInfo.email || !userInfo.verified_email) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email not verified with Google'
+      });
+    }
+
+    // Generate JWT token
+    const jwtSecret = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+    const token = jwt.sign(
+      {
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
+        provider: 'google',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // 24 hours
+      },
+      jwtSecret,
+      { algorithm: 'HS256' }
+    );
+
+    console.log('[Google OAuth] JWT token generated for:', userInfo.email);
+
+    // Return token and user info
+    res.status(200).json({
+      status: 'success',
+      message: 'Google authentication successful',
+      token,
+      user: {
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture
+      }
+    });
+
+  } catch (error) {
+    console.error('[Google OAuth] Error:', error.response?.data || error.message);
+    
+    if (error.response?.data) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Failed to authenticate with Google',
+        details: error.response.data.error_description || error.response.data.error
+      });
+    }
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error during Google authentication'
+    });
+  }
+};
+
 module.exports = {
     sendUserOTP, verifyUserOTP, checkToken, validateAWSToken, userSignUp, 
     confirmUserSignUp, initiateUserAuth, forgotUserPassword, confirmUserForgotPassword,
-    resendVerificationCode, validateUnauthorisedAccess
+    resendVerificationCode, validateUnauthorisedAccess, googleOAuth
 }

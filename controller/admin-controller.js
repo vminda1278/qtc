@@ -1,8 +1,56 @@
 const { saveDraftSiteSettingsModel, getDraftSiteSettingsModel, publishSiteSettingsModel, getLiveSiteSettingsModel } = require('../model/admin');
 const express = require('express');
+const jwt = require('jsonwebtoken');
 
 const dotenv = require("dotenv");
 dotenv.config();
+
+/**
+ * Middleware to extract user email from JWT token
+ */
+const extractUserFromToken = (req, res, next) => {
+    try {
+        let token = req.headers['x-access-token'] || req.headers['authorization'];
+        
+        console.log('[DEBUG] Raw token header:', token);
+        
+        if (token && token.startsWith('Bearer ')) {
+            token = token.slice(7, token.length);
+        }
+        
+        if (!token) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Authentication token required'
+            });
+        }
+        
+        console.log('[DEBUG] Token after Bearer strip:', token);
+        
+        // Decode token (you can verify it here if needed)
+        const decoded = jwt.decode(token);
+        
+        console.log('[DEBUG] Decoded token:', decoded);
+        
+        if (!decoded || !decoded.email) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Invalid token or email not found'
+            });
+        }
+        
+        // Attach email to request object
+        req.userEmail = decoded.email;
+        console.log('[DEBUG] User email extracted:', req.userEmail);
+        next();
+    } catch (error) {
+        console.error('Error extracting user from token:', error);
+        return res.status(401).json({
+            status: 'error',
+            message: 'Failed to authenticate token'
+        });
+    }
+};
 
 /**
  * Save draft site settings for an enterprise
@@ -10,20 +58,14 @@ dotenv.config();
  * 
  * Expected body:
  * {
- *   email: "enterprise@example.com",
  *   siteSettings: { ...settings data... }
  * }
+ * Email is extracted from JWT token
  */
 const saveDraftSiteSettings = async (req, res, next) => {
     try {
         console.log('[DEBUG] saveDraftSiteSettings request body:', JSON.stringify(req.body, null, 2));
-
-        if (!req.body || !req.body.email) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'email is required in request body'
-            });
-        }
+        console.log('[DEBUG] User email from token:', req.userEmail);
 
         if (!req.body.siteSettings || typeof req.body.siteSettings !== 'object') {
             return res.status(400).json({
@@ -32,7 +74,8 @@ const saveDraftSiteSettings = async (req, res, next) => {
             });
         }
 
-        const { email, siteSettings } = req.body;
+        const email = req.userEmail; // Get email from token
+        const { siteSettings } = req.body;
 
         await saveDraftSiteSettingsModel({ email, siteSettings });
 
@@ -58,20 +101,13 @@ const saveDraftSiteSettings = async (req, res, next) => {
 
 /**
  * Get draft site settings for an enterprise
- * GET /v1/admin/getDraftSiteSettings?email=enterprise@example.com
+ * GET /v1/admin/getDraftSiteSettings
+ * Email is extracted from JWT token
  */
 const getDraftSiteSettings = async (req, res, next) => {
     try {
-        console.log('[DEBUG] getDraftSiteSettings query params:', req.query);
-
-        const { email } = req.query;
-
-        if (!email) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'email is required as query parameter'
-            });
-        }
+        const email = req.userEmail; // Get email from token
+        console.log('[DEBUG] getDraftSiteSettings for email:', email);
 
         const siteSettings = await getDraftSiteSettingsModel({ email });
 
@@ -104,21 +140,16 @@ const getDraftSiteSettings = async (req, res, next) => {
  * 
  * Expected body:
  * {
- *   email: "enterprise@example.com",
  *   subdomain: "brighttax",
  *   siteSettings: { ...settings data... }
  * }
+ * Email is extracted from JWT token
  */
 const publishSiteSettings = async (req, res, next) => {
     try {
         console.log('[DEBUG] publishSiteSettings request body:', JSON.stringify(req.body, null, 2));
 
-        if (!req.body || !req.body.email) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'email is required in request body'
-            });
-        }
+        const email = req.userEmail; // Get email from token
 
         if (!req.body.subdomain) {
             return res.status(400).json({
@@ -134,7 +165,7 @@ const publishSiteSettings = async (req, res, next) => {
             });
         }
 
-        const { email, subdomain, siteSettings } = req.body;
+        const { subdomain, siteSettings } = req.body;
 
         await publishSiteSettingsModel({ email, subdomain, siteSettings });
 
@@ -161,20 +192,13 @@ const publishSiteSettings = async (req, res, next) => {
 
 /**
  * Get live site settings for an enterprise
- * GET /v1/admin/getLiveSiteSettings?email=enterprise@example.com
+ * GET /v1/admin/getLiveSiteSettings
+ * Email is extracted from JWT token
  */
 const getLiveSiteSettings = async (req, res, next) => {
     try {
-        console.log('[DEBUG] getLiveSiteSettings query params:', req.query);
-
-        const { email } = req.query;
-
-        if (!email) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'email is required as query parameter'
-            });
-        }
+        const email = req.userEmail; // Get email from token
+        console.log('[DEBUG] getLiveSiteSettings for email:', email);
 
         const siteSettings = await getLiveSiteSettingsModel({ email });
 
@@ -203,6 +227,9 @@ const getLiveSiteSettings = async (req, res, next) => {
 
 // Create Express router
 const adminRouter = express.Router();
+
+// Apply extractUserFromToken middleware to all admin routes
+adminRouter.use(extractUserFromToken);
 
 adminRouter.post('/saveDraftSiteSettings', saveDraftSiteSettings);
 adminRouter.get('/getDraftSiteSettings', getDraftSiteSettings);
