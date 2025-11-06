@@ -1,10 +1,12 @@
 const express = require('express');
 const authController = require('../controller/auth-controller');
+const superadminController = require('../controller/superadmin-controller');
 const adminController = require('../controller/admin-controller');
 
 // Create a simple router for the root path
-const adminRouter = express.Router();
+const superadminRouter = express.Router();
 const authRouter = express.Router();
+const adminRouter = express.Router();
 
 // Retailer router removed; all endpoints consolidated under LSP router
 
@@ -18,13 +20,17 @@ authRouter.post('/sendOTP', authController.sendUserOTP);
 authRouter.post('/verifyOTP', authController.verifyUserOTP);
 authRouter.post('/validate-token', authController.validateAWSToken);
 
-adminRouter.post('/confirmuserSignup', adminController.adminConfirmUserSignUp);
-adminRouter.post('/deleteEnterprise', adminController.deleteEnterprise);
-adminRouter.get('/getAllEnterprises', adminController.getAllEnterprises);
+superadminRouter.post('/confirmuserSignup', superadminController.adminConfirmUserSignUp);
+superadminRouter.post('/deleteEnterprise', superadminController.deleteEnterprise);
+superadminRouter.get('/getAllEnterprises', superadminController.getAllEnterprises);
+
+// Admin routes
+adminRouter.post('/saveSiteSettings', adminController.saveSiteSettings);
+adminRouter.get('/getSiteSettings', adminController.getSiteSettings);
 
 
 // Root router - Just add an info endpoint
-adminRouter.get('/info', (req, res) => {
+superadminRouter.get('/info', (req, res) => {
   res.json({
     name: 'QwikTax API',
     version: '1.0.0',
@@ -35,6 +41,7 @@ adminRouter.get('/info', (req, res) => {
 });
 
 module.exports = {
-  adminRouter,
-  authRouter
+  superadminRouter,
+  authRouter,
+  adminRouter
 };

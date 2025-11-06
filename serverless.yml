@@ -379,18 +379,26 @@ custom:
             path: /v1/rider/get_new_order
             method: post
             
-        # Admin Routes (no authentication)
+        # SuperAdmin Routes (no authentication)
         - httpApi:
-            path: /v1/admin/confirmuserSignup
+            path: /v1/superadmin/confirmuserSignup
             method: post
         - httpApi:
-            path: /v1/admin/deleteEnterprise
+            path: /v1/superadmin/deleteEnterprise
             method: post
         - httpApi:
-            path: /v1/admin/getAllEnterprises
+            path: /v1/superadmin/getAllEnterprises
             method: get
         - httpApi:
-            path: /v1/admin/info
+            path: /v1/superadmin/info
+            method: get
+        
+        # Admin Routes (authenticated via Express middleware)
+        - httpApi:
+            path: /v1/admin/saveSiteSettings
+            method: post
+        - httpApi:
+            path: /v1/admin/getSiteSettings
             method: get
         
         # Webhook Routes (typically no auth required for external webhooks)
