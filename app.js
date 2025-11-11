@@ -16,7 +16,7 @@ const config = require('./config');
 require('express-async-errors');
 const app = express();
 const bodyParser = require('body-parser');
-const { superadminRouter, authRouter, adminRouter, publicRouter } = require('./utility/routes');
+const { superadminRouter, authRouter, adminRouter, publicRouter, uploadRouter } = require('./utility/routes');
 const { validateAWSToken, checkToken } = require('./controller/auth-controller');
 
 
@@ -32,6 +32,7 @@ app.use('/v1/auth', authRouter);
 app.use('/v1/superadmin', superadminRouter);
 app.use('/v1/admin', adminRouter);
 app.use('/v1/public', publicRouter);
+app.use('/v1/upload', uploadRouter);
 // Retailer, rider, LSP, and public routes removed - add them back when controllers are created
 //app.use(API_BASE_PATH, router);  // Root router with minimal endpoints
 

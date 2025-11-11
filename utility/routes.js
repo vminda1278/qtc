@@ -3,6 +3,7 @@ const authController = require('../controller/auth-controller');
 const superadminController = require('../controller/superadmin-controller');
 const adminController = require('../controller/admin-controller');
 const publicController = require('../controller/public-controller');
+const uploadController = require('../controller/upload-controller');
 
 // Create a simple router for the root path
 const superadminRouter = express.Router();
@@ -10,6 +11,7 @@ const authRouter = express.Router();
 // Use adminRouter from admin-controller (includes JWT middleware)
 const adminRouter = adminController.adminRouter;
 const publicRouter = express.Router();
+const uploadRouter = express.Router();
 
 // Retailer router removed; all endpoints consolidated under LSP router
 
@@ -34,6 +36,10 @@ superadminRouter.get('/getAllEnterprises', superadminController.getAllEnterprise
 // Public routes (unauthenticated)
 publicRouter.get('/site/:subdomain', publicController.getSiteBySubdomain);
 
+// Upload routes (authenticated - add JWT middleware if needed)
+uploadRouter.post('/image', uploadController.upload.single('image'), uploadController.uploadImage);
+uploadRouter.post('/images', uploadController.upload.array('images', 10), uploadController.uploadImages);
+
 
 // Root router - Just add an info endpoint
 superadminRouter.get('/info', (req, res) => {
@@ -50,5 +56,6 @@ module.exports = {
   superadminRouter,
   authRouter,
   adminRouter,
-  publicRouter
+  publicRouter,
+  uploadRouter
 };
