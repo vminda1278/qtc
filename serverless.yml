@@ -1,32 +1,33 @@
-# "org" ensures this Service is used with the correct Serverless Framework Access Key.
-org: qwiktax
-# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
-app: qwiktax
 # "service" is the name of this project. This will also be added to your AWS resource names.
 service: qwiktax
 
 package:
-  exclude:
-    - .env
-    - .env.*
-    - .env.example
-    - .env.local
-    - .env.backup
-    - node_modules/.cache/**
-    - test/**
-    - docs/**
-    - scripts/**
-    - "*.md"
-    - .git/**
-    - .gitignore
-    - .DS_Store
+  patterns:
+    - '!.env'
+    - '!.env.*'
+    - '!.env.example'
+    - '!.env.local'
+    - '!.env.backup'
+    - '!node_modules/.cache/**'
+    - '!node_modules/aws-sdk/**'
+    - '!node_modules/nodemon/**'
+    - '!test/**'
+    - '!docs/**'
+    - '!scripts/**'
+    - '!*.md'
+    - '!.git/**'
+    - '!.gitignore'
+    - '!.DS_Store'
+    - '!.serverless/**'
+  individually: false
+  excludeDevDependencies: true
 
 provider:
   name: aws
   runtime: nodejs20.x
   stage: ${opt:stage, 'vikas'}
   profile: beejcap-aws
-  region: ap-south-1
+  region: us-east-1
   environment:
     # DynamoDB Table
     DYNAMODB_TABLE: qwiktax_${self:provider.stage}
@@ -49,12 +50,18 @@ provider:
     SNS_PLATFORM_APPLICATION_ANDROID: ${env:SNS_PLATFORM_APPLICATION_ANDROID, ''}
     # Stage and Region
     STAGE: ${self:provider.stage}
-    REGION: ${self:provider.region}
     # JWT Secret for OTP-based authentication
-    JWT_SECRET: ${env:JWT_SECRET, 'qwiktax-jwt-secret-${self:provider.stage}-2025'}
+    JWT_SECRET: ${env:JWT_SECRET}
+    # Google OAuth Configuration
+    GOOGLE_CLIENT_ID: ${self:custom.googleClientId.${self:provider.stage}}
+    GOOGLE_CLIENT_SECRET: ${self:custom.googleClientSecret.${self:provider.stage}}
+    GOOGLE_REDIRECT_URI: ${self:custom.googleRedirectUri.${self:provider.stage}}
+    # S3 Bucket for assets
+    S3_ASSETS_BUCKET:
+      Ref: S3AssetsBucket
     # Logging Configuration
     LOG_LEVEL: ${env:LOG_LEVEL, self:custom.logLevels.${self:provider.stage}, 'INFO'}
-    SERVICE_NAME: lsp-oms
+    SERVICE_NAME: qwiktax
     ENABLE_REQUEST_LOGGING: true
     # Custom Domain Configuration
     API_DOMAIN: ${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.ai'}
@@ -69,14 +76,47 @@ provider:
             - "xray:PutTelemetryRecords"
           Resource:
             - "*"
-        - Effect: "Allow"
-          Action: ["dynamodb:*"]
-          Resource: "*"
+        - Effect: "Allow" # DynamoDB access - scoped to specific table
+          Action: 
+            - "dynamodb:Query"
+            - "dynamodb:Scan"
+            - "dynamodb:GetItem"
+            - "dynamodb:PutItem"
+            - "dynamodb:UpdateItem"
+            - "dynamodb:DeleteItem"
+            - "dynamodb:BatchGetItem"
+            - "dynamodb:BatchWriteItem"
+          Resource:
+            - Fn::GetAtt: [appTable, Arn]
+            - Fn::Join:
+                - ""
+                - - Fn::GetAtt: [appTable, Arn]
+                  - "/index/*"
         - Effect: "Allow"
           Action:
             ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
           Resource: "*"
-        - Effect: "Allow" # Allow SNS actions for push notifications
+        - Effect: "Allow" # S3 access for assets (logos, images)
+          Action:
+            - "s3:PutObject"
+            - "s3:GetObject"
+            - "s3:DeleteObject"
+            - "s3:PutObjectAcl"
+          Resource:
+            - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - Ref: S3AssetsBucket
+                  - "/*"
+        - Effect: "Allow" # S3 list bucket
+          Action:
+            - "s3:ListBucket"
+          Resource:
+            - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - Ref: S3AssetsBucket
+        - Effect: "Allow" # SNS actions for push notifications
           Action:
             - "sns:Publish"
             - "sns:CreatePlatformEndpoint"
@@ -84,34 +124,44 @@ provider:
             - "sns:GetEndpointAttributes"
             - "sns:SetEndpointAttributes"
             - "sns:ListEndpointsByPlatformApplication"
-            - "sns:CreatePlatformApplication"
-            - "sns:GetPlatformApplicationAttributes"
-            - "sns:SetPlatformApplicationAttributes"
-            - "sns:ListPlatformApplications"
-          Resource: "*" # Adjust this to specify particular SNS resources if necessary  
-        - Effect: "Allow" # Allow all actions on all Cognito resources
+          Resource:
+            - Ref: SNSNotificationTopic
+        - Effect: "Allow" # Cognito access - scoped to user pool
           Action:
-            - "cognito-idp:*"
-          Resource: "*"  
-        - Effect: "Allow" # Allow all actions on all Cognito resources
+            - "cognito-idp:AdminInitiateAuth"
+            - "cognito-idp:AdminCreateUser"
+            - "cognito-idp:AdminSetUserPassword"
+            - "cognito-idp:AdminGetUser"
+            - "cognito-idp:AdminUpdateUserAttributes"
+            - "cognito-idp:AdminDeleteUser"
+            - "cognito-idp:ListUsers"
+          Resource:
+            - Fn::GetAtt: [CognitoUserPoolMyUserPool1, Arn]
+        - Effect: "Allow" # SES for sending emails
           Action:
-            - "ses:*"
+            - "ses:SendEmail"
+            - "ses:SendRawEmail"
           Resource: "*"    
-  httpApi:        
-    # Authorizers removed - all authentication handled by Express middleware
-    # authorizers:
-    #   qwiktaxJwtAuthorizer:
-    #     type: jwt
-    #     identitySource: $request.header.Authorization
-    #     issuerUrl: 
-    #       Fn::Join:
-    #       - ""
-    #       - - "https://cognito-idp."
-    #         - ${self:provider.region}
-    #         - ".amazonaws.com/"
-    #         - Ref: CognitoUserPoolMyUserPool1
-    #     audience:
-    #       - Ref: CognitoUserPoolClient         
+  httpApi:
+    cors:
+      allowedOrigins:
+        - http://localhost:3000
+        - http://localhost:3001
+        - https://qwiktax.in
+        - https://qwiktax.ai
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+        - X-Amz-Date
+        - X-Api-Key
+        - X-Amz-Security-Token
+      allowedMethods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      allowCredentials: true
 functions: ${self:custom.functions.${self:provider.stage}}
 
 resources:
@@ -147,9 +197,6 @@ resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
-            ProvisionedThroughput:
-              ReadCapacityUnits: 1
-              WriteCapacityUnits: 1
           - IndexName: GSI2
             KeySchema:
               - AttributeName: PK2
@@ -158,12 +205,7 @@ resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
-            ProvisionedThroughput:
-              ReadCapacityUnits: 1
-              WriteCapacityUnits: 1
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1
+        BillingMode: PAY_PER_REQUEST  # On-demand pricing - no need for ProvisionedThroughput
     CognitoUserPoolMyUserPool1:
       Type: AWS::Cognito::UserPool
       Properties:
@@ -223,7 +265,37 @@ resources:
       Type: AWS::SNS::Topic
       Properties:
         TopicName: qwiktax-notifications-${self:provider.stage}
-        DisplayName: LSP-OMS Notifications
+        DisplayName: QwikTax Notifications
+
+    # S3 Bucket for assets (logos, images, documents)
+    S3AssetsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: qwiktax-assets-${self:provider.stage}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - 'http://localhost:3000'
+                - 'http://localhost:3001'
+                - 'https://*.qwiktax.in'
+                - 'https://qwiktax.in'
+                - 'https://*.qwiktax.ai'
+                - 'https://qwiktax.ai'
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+              AllowedHeaders:
+                - '*'
+              MaxAge: 3600
+        OwnershipControls:
+          Rules:
+            - ObjectOwnership: ObjectWriter
 
   Outputs:
     # DynamoDB Table
@@ -255,6 +327,13 @@ resources:
         Ref: SNSNotificationTopic
       Export:
         Name: ${self:service}-${self:provider.stage}-SNSNotificationTopicArn
+
+    S3AssetsBucketName:
+      Description: "S3 Bucket for assets"
+      Value:
+        Ref: S3AssetsBucket
+      Export:
+        Name: ${self:service}-${self:provider.stage}-S3AssetsBucketName
 
 plugins: ${self:custom.plugins.${self:provider.stage}}
 
@@ -294,6 +373,9 @@ custom:
             path: /v1/auth/login
             method: post
         - httpApi:
+            path: /v1/auth/google
+            method: post
+        - httpApi:
             path: /v1/auth/confirm
             method: post
         - httpApi:
@@ -305,80 +387,17 @@ custom:
         - httpApi:
             path: /v1/auth/resend-code
             method: post
-        - httpApi:
-            path: /v1/auth/validate-token
-            method: post
-        # OTP-based auth endpoints (for riders)
+        # OTP-based auth endpoints
         - httpApi:
             path: /v1/auth/sendOTP
             method: post
         - httpApi:
             path: /v1/auth/verifyOTP
             method: post
+        - httpApi:
+            path: /v1/auth/validate-token
+            method: post
         
-        # Public endpoints
-        - httpApi:
-            path: /v1/public/getAllLsp
-            method: get
-        
-        # LSP Routes (authenticated via Express middleware)
-        - httpApi:
-            path: /v1/lsp/getAllRiders
-            method: get
-        - httpApi:
-            path: /v1/lsp/getNearbyActiveRiders
-            method: get
-        - httpApi:
-            path: /v1/lsp/getRecentOrders
-            method: get
-        - httpApi:
-            path: /v1/lsp/configureServiceability
-            method: post
-        - httpApi:
-            path: /v1/lsp/configureWebhook
-            method: post
-        - httpApi:
-            path: /v1/lsp/validateServiceability
-            method: post
-        - httpApi:
-            path: /v1/lsp/checkServiceability
-            method: post
-        - httpApi:
-            path: /v1/lsp/createOrder
-            method: post
-        - httpApi:
-            path: /v1/lsp/track/{tracking_id}
-            method: get
-        - httpApi:
-            path: /v1/lsp/orders/{tracking_id}/cancel
-            method: post
-            
-        # Rider Routes (authenticated via Express middleware)
-        - httpApi:
-            path: /v1/rider/status
-            method: post
-        - httpApi:
-            path: /v1/rider/order
-            method: post
-        - httpApi:
-            path: /v1/rider/get_my_assigned_orders
-            method: get
-        - httpApi:
-            path: /v1/rider/order/{id}
-            method: get
-        - httpApi:
-            path: /v1/rider/update_order_status
-            method: post
-        - httpApi:
-            path: /v1/rider/gps_update
-            method: post
-        - httpApi:
-            path: /v1/rider/register-device
-            method: post
-        - httpApi:
-            path: /v1/rider/get_new_order
-            method: post
-            
         # SuperAdmin Routes (no authentication)
         - httpApi:
             path: /v1/superadmin/confirmuserSignup
@@ -404,6 +423,9 @@ custom:
             path: /v1/admin/publishSiteSettings
             method: post
         - httpApi:
+            path: /v1/admin/getPublishedSiteSettings
+            method: get
+        - httpApi:
             path: /v1/admin/getLiveSiteSettings
             method: get
         
@@ -412,9 +434,12 @@ custom:
             path: /v1/public/site/{subdomain}
             method: get
         
-        # Webhook Routes (typically no auth required for external webhooks)
+        # Upload Routes (authenticated)
         - httpApi:
-            path: /v1/webhook/orders/{tracking_id}/status
+            path: /v1/upload/image
+            method: post
+        - httpApi:
+            path: /v1/upload/images
             method: post
   
   # Exclude functions, events for vikas stage
@@ -459,3 +484,25 @@ custom:
     # Add more stages as needed
     staging: stagingapi.qwiktax.ai
     test: testapi.qwiktax.ai
+  
+  # Google OAuth Configuration - Stage-specific
+  googleClientId:
+    vikas: ${env:GOOGLE_CLIENT_ID, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
+    dev: ${env:GOOGLE_CLIENT_ID_DEV, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
+    prod: ${env:GOOGLE_CLIENT_ID_PROD, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
+    staging: ${env:GOOGLE_CLIENT_ID_STAGING, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
+    test: ${env:GOOGLE_CLIENT_ID_TEST, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
+  
+  googleClientSecret:
+    vikas: ${env:GOOGLE_CLIENT_SECRET, ''}
+    dev: ${env:GOOGLE_CLIENT_SECRET_DEV, ''}
+    prod: ${env:GOOGLE_CLIENT_SECRET_PROD, ''}
+    staging: ${env:GOOGLE_CLIENT_SECRET_STAGING, ''}
+    test: ${env:GOOGLE_CLIENT_SECRET_TEST, ''}
+  
+  googleRedirectUri:
+    vikas: ${env:GOOGLE_REDIRECT_URI, 'http://localhost:3000/auth/callback'}
+    dev: https://dev.qwiktax.in/auth/callback
+    prod: https://qwiktax.in/auth/callback
+    staging: https://staging.qwiktax.in/auth/callback
+    test: https://test.qwiktax.in/auth/callback
