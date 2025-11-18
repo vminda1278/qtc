@@ -983,7 +983,7 @@ const validateAWSToken = async (req, res, next) => {
  */
 const googleOAuth = async (req, res, next) => {
   try {
-    const { code } = req.body;
+    const { code, redirect_uri } = req.body;
 
     if (!code) {
       return res.status(400).json({
@@ -1003,12 +1003,16 @@ const googleOAuth = async (req, res, next) => {
       });
     }
 
+    // Use provided redirect_uri or fallback to environment variable
+    const redirectUri = redirect_uri || process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/callback';
+    console.log('[Google OAuth] Using redirect URI:', redirectUri);
+
     // Exchange authorization code for access token
     const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
       code,
       client_id: process.env.GOOGLE_CLIENT_ID,
       client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/callback',
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code'
     });
 

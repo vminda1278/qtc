@@ -10,7 +10,37 @@ package:
     - '!.env.backup'
     - '!node_modules/.cache/**'
     - '!node_modules/aws-sdk/**'
+    - '!node_modules/@aws-sdk/**'
+    - '!node_modules/@smithy/**'
     - '!node_modules/nodemon/**'
+    - '!node_modules/serverless/**'
+    - '!node_modules/serverless-*/**'
+    - '!node_modules/**/test/**'
+    - '!node_modules/**/tests/**'
+    - '!node_modules/**/benchmark/**'
+    - '!node_modules/**/benchmarks/**'
+    - '!node_modules/**/*.md'
+    - '!node_modules/**/*.markdown'
+    - '!node_modules/**/*.txt'
+    - '!node_modules/**/*.map'
+    - '!node_modules/**/*.ts'
+    - '!node_modules/**/*.d.ts'
+    - '!node_modules/**/README*'
+    - '!node_modules/**/CHANGELOG*'
+    - '!node_modules/**/LICENSE*'
+    - '!node_modules/**/HISTORY*'
+    - '!node_modules/**/.npmignore'
+    - '!node_modules/**/.gitignore'
+    - '!node_modules/**/.travis.yml'
+    - '!node_modules/**/.editorconfig'
+    - '!node_modules/**/.eslintrc*'
+    - '!node_modules/**/example/**'
+    - '!node_modules/**/examples/**'
+    - '!node_modules/**/docs/**'
+    - '!node_modules/**/documentation/**'
+    - '!node_modules/**/Makefile'
+    - '!node_modules/**/*.spec.js'
+    - '!node_modules/**/*.test.js'
     - '!test/**'
     - '!docs/**'
     - '!scripts/**'
@@ -31,23 +61,6 @@ provider:
   environment:
     # DynamoDB Table
     DYNAMODB_TABLE: qwiktax_${self:provider.stage}
-    # Cognito Configuration - Dynamic based on stage
-    COGNITO_USER_POOL_ID: 
-      Ref: CognitoUserPoolMyUserPool1
-    COGNITO_CLIENT_ID:
-      Ref: CognitoUserPoolClient
-    COGNITO_REGION: ${self:provider.region}
-    COGNITO_ISSUER:
-      Fn::Join:
-        - ""
-        - - "https://cognito-idp."
-          - ${self:provider.region}
-          - ".amazonaws.com/"
-          - Ref: CognitoUserPoolMyUserPool1
-    # SNS Platform Applications for Push Notifications (set via environment variables)
-    SNS_PLATFORM_APPLICATION_IOS: ${env:SNS_PLATFORM_APPLICATION_IOS, ''}
-    SNS_PLATFORM_APPLICATION_IOS_SANDBOX: ${env:SNS_PLATFORM_APPLICATION_IOS_SANDBOX, ''}
-    SNS_PLATFORM_APPLICATION_ANDROID: ${env:SNS_PLATFORM_APPLICATION_ANDROID, ''}
     # Stage and Region
     STAGE: ${self:provider.stage}
     # JWT Secret for OTP-based authentication
@@ -64,8 +77,8 @@ provider:
     SERVICE_NAME: qwiktax
     ENABLE_REQUEST_LOGGING: true
     # Custom Domain Configuration
-    API_DOMAIN: ${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.ai'}
-    API_BASE_URL: https://${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.ai'}
+    API_DOMAIN: ${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.in'}
+    API_BASE_URL: https://${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.in'}
   iam:
     role:
       name: qwiktax-${opt:stage, self:provider.stage}-role
@@ -126,17 +139,6 @@ provider:
             - "sns:ListEndpointsByPlatformApplication"
           Resource:
             - Ref: SNSNotificationTopic
-        - Effect: "Allow" # Cognito access - scoped to user pool
-          Action:
-            - "cognito-idp:AdminInitiateAuth"
-            - "cognito-idp:AdminCreateUser"
-            - "cognito-idp:AdminSetUserPassword"
-            - "cognito-idp:AdminGetUser"
-            - "cognito-idp:AdminUpdateUserAttributes"
-            - "cognito-idp:AdminDeleteUser"
-            - "cognito-idp:ListUsers"
-          Resource:
-            - Fn::GetAtt: [CognitoUserPoolMyUserPool1, Arn]
         - Effect: "Allow" # SES for sending emails
           Action:
             - "ses:SendEmail"
@@ -148,7 +150,6 @@ provider:
         - http://localhost:3000
         - http://localhost:3001
         - https://qwiktax.in
-        - https://qwiktax.ai
       allowedHeaders:
         - Content-Type
         - Authorization
@@ -175,90 +176,12 @@ resources:
             AttributeType: S
           - AttributeName: SK
             AttributeType: S
-          - AttributeName: PK1
-            AttributeType: S
-          - AttributeName: SK1
-            AttributeType: S
-          - AttributeName: PK2
-            AttributeType: S
-          - AttributeName: SK2
-            AttributeType: S
         KeySchema:
           - AttributeName: PK
             KeyType: HASH
           - AttributeName: SK
             KeyType: RANGE
-        GlobalSecondaryIndexes:
-          - IndexName: GSI1
-            KeySchema:
-              - AttributeName: PK1
-                KeyType: HASH
-              - AttributeName: SK1
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-          - IndexName: GSI2
-            KeySchema:
-              - AttributeName: PK2
-                KeyType: HASH
-              - AttributeName: SK2
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
         BillingMode: PAY_PER_REQUEST  # On-demand pricing - no need for ProvisionedThroughput
-    CognitoUserPoolMyUserPool1:
-      Type: AWS::Cognito::UserPool
-      Properties:
-        UserPoolName: qwiktaxUserPool_${self:provider.stage}
-        Schema:
-          - Name: email
-            Required: true
-            Mutable: false
-            AttributeDataType: String
-          - Name: isConfirmedByAdmin
-            Required: false
-            Mutable: true
-            AttributeDataType: Boolean
-            DeveloperOnlyAttribute: false  
-          - Name: role
-            Required: false
-            Mutable: true
-            AttributeDataType: String
-            DeveloperOnlyAttribute: false    
-          - Name: enterpriseType
-            Required: false
-            Mutable: true
-            AttributeDataType: String   
-          - Name: eid
-            Required: false
-            Mutable: true
-            AttributeDataType: String     
-        AutoVerifiedAttributes:
-          - email
-        EmailConfiguration:
-          EmailSendingAccount: DEVELOPER  
-          SourceArn: arn:aws:ses:ap-south-1:347803923597:identity/qwiktax.ai
-          From: The qwiktax Team <hello@qwiktax.ai>
-        VerificationMessageTemplate:
-          DefaultEmailOption: CONFIRM_WITH_CODE
-          EmailMessage: | 
-            Welcome to qwiktax!<br/><br/> 
-            Your verification code is : {####}.<br/><br/>
-            Please use this code to complete your account verification.<br/><br/>
-            Thank You,<br/>
-            The qwiktax Team<br/>
-          EmailSubject: "[Action Required] Your account verification code"
-          # Optional: If you also want to customize SMS messages
-          SmsMessage: "Welcome to qwiktax! Your verification code is {####}."  
-    CognitoUserPoolClient:
-      Type: AWS::Cognito::UserPoolClient
-      Properties:
-        ClientName: qwiktaxUserPoolClient_${self:provider.stage}
-        UserPoolId:
-          Ref: CognitoUserPoolMyUserPool1
-        ExplicitAuthFlows:
-          - ALLOW_USER_PASSWORD_AUTH
-          - ALLOW_REFRESH_TOKEN_AUTH
 
     # SNS Topic for general notifications
     SNSNotificationTopic:
@@ -284,8 +207,6 @@ resources:
                 - 'http://localhost:3001'
                 - 'https://*.qwiktax.in'
                 - 'https://qwiktax.in'
-                - 'https://*.qwiktax.ai'
-                - 'https://qwiktax.ai'
               AllowedMethods:
                 - GET
                 - PUT
@@ -305,21 +226,6 @@ resources:
         Ref: appTable
       Export:
         Name: ${self:service}-${self:provider.stage}-DynamoDBTableName
-
-    # Cognito User Pool
-    CognitoUserPoolId:
-      Description: "Cognito User Pool ID"
-      Value:
-        Ref: CognitoUserPoolMyUserPool1
-      Export:
-        Name: ${self:service}-${self:provider.stage}-CognitoUserPoolId
-
-    CognitoUserPoolClientId:
-      Description: "Cognito User Pool Client ID"
-      Value:
-        Ref: CognitoUserPoolClient
-      Export:
-        Name: ${self:service}-${self:provider.stage}-CognitoUserPoolClientId
 
     SNSNotificationTopicArn:
       Description: "SNS Topic ARN for notifications"
@@ -360,8 +266,6 @@ custom:
   
   # All functions definition
   allFunctions:
-    PreTokenGeneration:
-      handler: app.preTokenGenerationHandler
     api:
       handler: app.handler
       events:
@@ -459,10 +363,10 @@ custom:
       excludeResources: false
   
   customDomain:
-    domainName: ${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.ai'}
+    domainName: ${self:custom.domainMapping.${self:provider.stage}, 'devapi.qwiktax.in'}
     stage: ${self:provider.stage}
     basePath: ''
-    certificateName: '*.qwiktax.ai'
+    certificateName: '*.qwiktax.in'
     createRoute53Record: false
     endpointType: 'regional'
     securityPolicy: tls_1_2
@@ -479,11 +383,11 @@ custom:
     test: DEBUG
   
   domainMapping:
-    dev: devapi.qwiktax.ai
-    prod: api.qwiktax.ai
+    dev: devapi.qwiktax.in
+    prod: api.qwiktax.in
     # Add more stages as needed
-    staging: stagingapi.qwiktax.ai
-    test: testapi.qwiktax.ai
+    staging: stagingapi.qwiktax.in
+    test: testapi.qwiktax.in
   
   # Google OAuth Configuration - Stage-specific
   googleClientId:
@@ -502,7 +406,7 @@ custom:
   
   googleRedirectUri:
     vikas: ${env:GOOGLE_REDIRECT_URI, 'http://localhost:3000/auth/callback'}
-    dev: https://dev.qwiktax.in/auth/callback
-    prod: https://qwiktax.in/auth/callback
-    staging: https://staging.qwiktax.in/auth/callback
-    test: https://test.qwiktax.in/auth/callback
+    dev: https://admin.dev.qwiktax.in/auth/callback
+    prod: https://admin.qwiktax.in/auth/callback
+    staging: https://admin.staging.qwiktax.in/auth/callback
+    test: https://admin.test.qwiktax.in/auth/callback

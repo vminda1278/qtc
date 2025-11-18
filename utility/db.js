@@ -18,7 +18,7 @@ if (process.env.AWS_LOCAL_DB_ENDPOINT) {
   console.log('Using LOCAL DynamoDB endpoint');
   clientInit = {
     endpoint: process.env.AWS_LOCAL_DB_ENDPOINT, 
-    region: process.env.REGION || 'ap-south-1', 
+    region: process.env.REGION || 'us-east-1', 
     credentials: {  
       accessKeyId: 'ddfdfdfd',  
       secretAccessKey: 'sdsdsaa'
@@ -27,7 +27,7 @@ if (process.env.AWS_LOCAL_DB_ENDPOINT) {
 } else {
   console.log('Using REMOTE DynamoDB');
   clientInit = {
-    region: process.env.REGION || 'ap-south-1'
+    region: process.env.REGION || 'us-east-1'
   };
   
   // Add profile-based credentials if AWS_PROFILE is set
