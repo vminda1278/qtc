@@ -209,10 +209,46 @@ async function getSiteSettingsBySubdomainModel({ subdomain }) {
     }
 }
 
+/**
+ * Check if subdomain exists in LiveSites table
+ * 
+ * @param {Object} params - Function parameters
+ * @param {string} params.subdomain - Subdomain to check
+ * @returns {Promise<boolean>} - True if subdomain exists, false otherwise
+ * @throws {Error} If check fails
+ */
+async function checkSubdomainModel({ subdomain }) {
+    try {
+        if (!subdomain) {
+            throw new Error("subdomain is required");
+        }
+
+        const params = {
+            pk: "LiveSites",
+            sk: subdomain
+        };
+
+        console.log('[DEBUG] Checking subdomain existence:', JSON.stringify(params, null, 2));
+        
+        const response = await getItem(params);
+        
+        // If Item exists, subdomain is taken
+        const exists = !!response.Item;
+        
+        console.log('[DEBUG] Subdomain check result - exists:', exists);
+        return exists;
+
+    } catch (e) {
+        console.error('Error in checkSubdomainModel:', e);
+        throw new Error(e.message || 'Failed to check subdomain');
+    }
+}
+
 module.exports = {
     saveDraftSiteSettingsModel,
     getDraftSiteSettingsModel,
     publishSiteSettingsModel,
     getLiveSiteSettingsModel,
-    getSiteSettingsBySubdomainModel
+    getSiteSettingsBySubdomainModel,
+    checkSubdomainModel
 };

@@ -225,6 +225,86 @@ const getLiveSiteSettings = async (req, res, next) => {
     }
 };
 
+/**
+ * Check if subdomain is available
+ * Queries LiveSites table (PK: LiveSites, SK: <subdomain>)
+ */
+const checkSubdomainAvailability = async (req, res, next) => {
+    try {
+        const { subdomain } = req.query;
+
+        if (!subdomain) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Subdomain parameter is required'
+            });
+        }
+
+        // Validate subdomain format
+        const subdomainRegex = /^[a-z0-9-]+$/;
+        if (!subdomainRegex.test(subdomain)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid subdomain format. Use only lowercase letters, numbers, and hyphens.'
+            });
+        }
+
+        if (subdomain.length < 3) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Subdomain must be at least 3 characters long'
+            });
+        }
+
+        const email = req.userEmail; // Get email from token
+        console.log('[DEBUG] Checking subdomain availability:', subdomain, 'for user:', email);
+
+        // Get user's current live settings to check their current subdomain
+        const { getLiveSiteSettingsModel, checkSubdomainModel } = require('../model/admin');
+        
+        let userCurrentSubdomain = null;
+        try {
+            const liveSettings = await getLiveSiteSettingsModel({ email });
+            if (liveSettings && liveSettings.GeneralSettings) {
+                userCurrentSubdomain = liveSettings.GeneralSettings.subdomain;
+                console.log('[DEBUG] User current subdomain:', userCurrentSubdomain);
+            }
+        } catch (error) {
+            console.log('[DEBUG] No live settings found for user, checking as new subdomain');
+        }
+
+        // If the subdomain is the same as user's current subdomain, it's available for them
+        if (userCurrentSubdomain && userCurrentSubdomain === subdomain) {
+            console.log('[DEBUG] Subdomain matches user current subdomain - available');
+            return res.status(200).json({
+                status: 'success',
+                available: true,
+                message: 'This is your current subdomain'
+            });
+        }
+
+        // Check if subdomain exists in LiveSites
+        const exists = await checkSubdomainModel({ subdomain });
+
+        console.log('[DEBUG] Subdomain exists:', exists);
+
+        res.status(200).json({
+            status: 'success',
+            available: !exists,
+            message: exists ? 'Subdomain is already taken' : 'Subdomain is available'
+        });
+
+    } catch (e) {
+        console.error('Error in checkSubdomainAvailability:', e);
+        const statusCode = e.$metadata && e.$metadata.httpStatusCode ? e.$metadata.httpStatusCode : 500;
+        res.status(statusCode).json({
+            status: 'error',
+            message: e.message || 'Failed to check subdomain availability'
+        });
+        next(e);
+    }
+};
+
 // Create Express router
 const adminRouter = express.Router();
 
@@ -235,11 +315,13 @@ adminRouter.post('/saveDraftSiteSettings', saveDraftSiteSettings);
 adminRouter.get('/getDraftSiteSettings', getDraftSiteSettings);
 adminRouter.post('/publishSiteSettings', publishSiteSettings);
 adminRouter.get('/getLiveSiteSettings', getLiveSiteSettings);
+adminRouter.get('/checkSubdomainAvailability', checkSubdomainAvailability);
 
 module.exports = {
     saveDraftSiteSettings,
     getDraftSiteSettings,
     publishSiteSettings,
     getLiveSiteSettings,
+    checkSubdomainAvailability,
     adminRouter
 };
