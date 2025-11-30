@@ -169,6 +169,26 @@ resources:
           Rules:
             - ObjectOwnership: ObjectWriter
 
+    # S3 Bucket Policy for public read access to assets
+    S3AssetsBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: S3AssetsBucket
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: '*'
+              Action:
+                - 's3:GetObject'
+              Resource:
+                Fn::Join:
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - Ref: S3AssetsBucket
+                    - '/*'
+
   Outputs:
     # DynamoDB Table
     DynamoDBTableName:

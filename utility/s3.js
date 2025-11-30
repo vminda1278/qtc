@@ -6,7 +6,8 @@ const s3Client = new S3Client({
     region: process.env.AWS_REGION || 'us-east-1',
 });
 
-const S3_BUCKET = process.env.S3_BUCKET_NAME || 'qwiktax-assets';
+// Support both S3_ASSETS_BUCKET (from serverless.yml) and S3_BUCKET_NAME (fallback)
+const S3_BUCKET = process.env.S3_ASSETS_BUCKET || process.env.S3_BUCKET_NAME || 'qwiktax-assets-prod';
 
 /**
  * Upload file to S3
@@ -18,6 +19,14 @@ const S3_BUCKET = process.env.S3_BUCKET_NAME || 'qwiktax-assets';
  */
 async function uploadToS3(fileBuffer, fileName, mimeType, folder = 'uploads') {
     try {
+        console.log('[S3] Starting upload:', {
+            bucket: S3_BUCKET,
+            fileName,
+            folder,
+            mimeType,
+            region: process.env.AWS_REGION || 'us-east-1'
+        });
+
         // Generate unique filename
         const fileExtension = fileName.split('.').pop();
         const uniqueFileName = `${uuidv4()}.${fileExtension}`;
@@ -40,8 +49,14 @@ async function uploadToS3(fileBuffer, fileName, mimeType, folder = 'uploads') {
         return publicUrl;
 
     } catch (error) {
-        console.error('[S3] Upload error:', error);
-        throw new Error('Failed to upload file to S3');
+        console.error('[S3] Upload error:', {
+            message: error.message,
+            code: error.code,
+            bucket: S3_BUCKET,
+            region: process.env.AWS_REGION,
+            error: error
+        });
+        throw new Error(`Failed to upload file to S3: ${error.message}`);
     }
 }
 

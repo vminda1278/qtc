@@ -315,6 +315,8 @@ adminRouter.post('/saveDraftSiteSettings', saveDraftSiteSettings);
 adminRouter.get('/getDraftSiteSettings', getDraftSiteSettings);
 adminRouter.post('/publishSiteSettings', publishSiteSettings);
 adminRouter.get('/getLiveSiteSettings', getLiveSiteSettings);
+// Alias for backward compatibility - frontend calls it "getPublishedSiteSettings"
+adminRouter.get('/getPublishedSiteSettings', getLiveSiteSettings);
 adminRouter.get('/checkSubdomainAvailability', checkSubdomainAvailability);
 
 module.exports = {
