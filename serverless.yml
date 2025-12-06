@@ -33,10 +33,8 @@ provider:
     STAGE: ${self:provider.stage}
     # JWT Secret for OTP-based authentication
     JWT_SECRET: ${env:JWT_SECRET}
-    # Google OAuth Configuration
+    # Google OAuth Configuration (Client-side OAuth with backend token verification)
     GOOGLE_CLIENT_ID: ${self:custom.googleClientId.${self:provider.stage}}
-    GOOGLE_CLIENT_SECRET: ${self:custom.googleClientSecret.${self:provider.stage}}
-    GOOGLE_REDIRECT_URI: ${self:custom.googleRedirectUri.${self:provider.stage}}
     # S3 Bucket for assets
     S3_ASSETS_BUCKET:
       Ref: S3AssetsBucket
@@ -288,24 +286,12 @@ custom:
     staging: stagingapi.qwiktax.in
     test: testapi.qwiktax.in
   
-  # Google OAuth Configuration - Stage-specific
+  # Google OAuth Configuration - Client-side OAuth with backend token verification
+  # Note: Client ID is public and safe to commit. No client secret needed!
+  # Frontend handles OAuth flow, backend only verifies the ID token.
   googleClientId:
     vikas: ${env:GOOGLE_CLIENT_ID, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
-    dev: ${env:GOOGLE_CLIENT_ID_DEV, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
-    prod: ${env:GOOGLE_CLIENT_ID_PROD, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
-    staging: ${env:GOOGLE_CLIENT_ID_STAGING, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
-    test: ${env:GOOGLE_CLIENT_ID_TEST, '712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com'}
-  
-  googleClientSecret:
-    vikas: ${env:GOOGLE_CLIENT_SECRET, ''}
-    dev: ${env:GOOGLE_CLIENT_SECRET_DEV, ''}
-    prod: ${env:GOOGLE_CLIENT_SECRET_PROD, ''}
-    staging: ${env:GOOGLE_CLIENT_SECRET_STAGING, ''}
-    test: ${env:GOOGLE_CLIENT_SECRET_TEST, ''}
-  
-  googleRedirectUri:
-    vikas: ${env:GOOGLE_REDIRECT_URI, 'http://localhost:3000/auth/callback'}
-    dev: https://admin.dev.qwiktax.in/auth/callback
-    prod: https://admin.qwiktax.in/auth/callback
-    staging: https://admin.staging.qwiktax.in/auth/callback
-    test: https://admin.test.qwiktax.in/auth/callback
+    dev: 712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com
+    prod: 712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com
+    staging: 712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com
+    test: 712305779097-k5ap7d3kharrco4b5rqa6rkj3j49v1t9.apps.googleusercontent.com

@@ -7,9 +7,13 @@ let jwt = require('jsonwebtoken');
 const jwkToPem = require('jwk-to-pem');
 const dotenv = require("dotenv");
 const axios = require('axios');
+const { OAuth2Client } = require('google-auth-library');
 const { checkUserExistsInEnterpriseModel } = require('../model/enterprise');
 const { logger } = require('../utility/logger');
 dotenv.config()
+
+// Initialize Google OAuth2 Client for token verification
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const userSignUp = async (req, res, next) => {  
   try{
@@ -962,18 +966,26 @@ const validateAWSToken = async (req, res, next) => {
   };
 
 /**
- * Google OAuth - Exchange authorization code for user info and generate JWT
+ * Google OAuth - Verify ID token from client-side Google Sign-In
  * POST /v1/auth/google
+ * 
+ * This implements client-side OAuth flow where:
+ * 1. Frontend handles Google Sign-In and gets an ID token
+ * 2. Frontend sends the ID token to backend
+ * 3. Backend verifies the token with Google
+ * 4. Backend generates JWT for session management
+ * 
+ * No GOOGLE_CLIENT_SECRET needed - only GOOGLE_CLIENT_ID for verification!
  * 
  * Expected body:
  * {
- *   code: "4/0AeaY...", // Google authorization code
+ *   idToken: "eyJhbGc..." // Google ID token from frontend
  * }
  * 
  * Returns:
  * {
  *   status: 'success',
- *   token: 'eyJhbGc...', // JWT token
+ *   token: 'eyJhbGc...', // JWT token for QwikTax session
  *   user: {
  *     email: 'user@gmail.com',
  *     name: 'John Doe',
@@ -983,65 +995,53 @@ const validateAWSToken = async (req, res, next) => {
  */
 const googleOAuth = async (req, res, next) => {
   try {
-    const { code, redirect_uri } = req.body;
+    const { idToken } = req.body;
 
-    if (!code) {
+    if (!idToken) {
       return res.status(400).json({
         status: 'error',
-        message: 'Authorization code is required'
+        message: 'Google ID token is required'
       });
     }
 
-    console.log('[Google OAuth] Received code:', code.substring(0, 20) + '...');
+    console.log('[Google OAuth] Received ID token, verifying...');
 
-    // Check for required environment variables
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-      console.error('[Google OAuth] Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET in environment variables');
+    // Check for required environment variable
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      console.error('[Google OAuth] Missing GOOGLE_CLIENT_ID in environment variables');
       return res.status(500).json({
         status: 'error',
         message: 'Server configuration error: Google OAuth credentials not configured'
       });
     }
 
-    // Use provided redirect_uri or fallback to environment variable
-    const redirectUri = redirect_uri || process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/callback';
-    console.log('[Google OAuth] Using redirect URI:', redirectUri);
-
-    // Exchange authorization code for access token
-    const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
-      code,
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code'
+    // Verify the Google ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
     });
 
-    const { access_token } = tokenResponse.data;
-    console.log('[Google OAuth] Successfully exchanged code for access token');
+    const payload = ticket.getPayload();
+    console.log('[Google OAuth] Token verified successfully for:', payload.email);
 
-    // Get user info from Google
-    const userInfoResponse = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: {
-        Authorization: `Bearer ${access_token}`
-      }
-    });
-
-    const userInfo = userInfoResponse.data;
-    console.log('[Google OAuth] User info retrieved:', {
-      email: userInfo.email,
-      name: userInfo.name,
-      verified: userInfo.verified_email
-    });
+    // Extract user info from verified token
+    const userInfo = {
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture,
+      email_verified: payload.email_verified,
+      sub: payload.sub // Google user ID
+    };
 
     // Verify email is present and verified
-    if (!userInfo.email || !userInfo.verified_email) {
+    if (!userInfo.email || !userInfo.email_verified) {
       return res.status(400).json({
         status: 'error',
         message: 'Email not verified with Google'
       });
     }
 
-    // Generate JWT token
+    // Generate JWT token for QwikTax session
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
     const token = jwt.sign(
       {
@@ -1049,6 +1049,7 @@ const googleOAuth = async (req, res, next) => {
         name: userInfo.name,
         picture: userInfo.picture,
         provider: 'google',
+        google_sub: userInfo.sub,
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // 24 hours
       },
@@ -1071,19 +1072,27 @@ const googleOAuth = async (req, res, next) => {
     });
 
   } catch (error) {
-    console.error('[Google OAuth] Error:', error.response?.data || error.message);
+    console.error('[Google OAuth] Token verification error:', error.message);
     
-    if (error.response?.data) {
-      return res.status(400).json({
+    // Handle specific Google verification errors
+    if (error.message && error.message.includes('Token used too late')) {
+      return res.status(401).json({
         status: 'error',
-        message: 'Failed to authenticate with Google',
-        details: error.response.data.error_description || error.response.data.error
+        message: 'Google token has expired. Please sign in again.'
+      });
+    }
+
+    if (error.message && error.message.includes('Invalid token signature')) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid Google token. Please sign in again.'
       });
     }
 
     res.status(500).json({
       status: 'error',
-      message: 'Internal server error during Google authentication'
+      message: 'Failed to verify Google token',
+      details: error.message
     });
   }
 };
