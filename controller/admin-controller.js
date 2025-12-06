@@ -144,6 +144,9 @@ const getDraftSiteSettings = async (req, res, next) => {
  *   siteSettings: { ...settings data... }
  * }
  * Email is extracted from JWT token
+ * 
+ * New Schema: PK: LiveSites, SK: <email>, ATTR1: <subdomain>
+ * This ensures each user can only have ONE live site
  */
 const publishSiteSettings = async (req, res, next) => {
     try {
@@ -167,11 +170,42 @@ const publishSiteSettings = async (req, res, next) => {
 
         const { subdomain, siteSettings } = req.body;
 
+        // Check if subdomain is already taken by another user
+        const { checkSubdomainModel, getLiveSiteSettingsModel } = require('../model/admin');
+        
+        // Get user's current live site settings to check their current subdomain
+        let userCurrentSubdomain = null;
+        try {
+            const liveSettings = await getLiveSiteSettingsModel({ email });
+            if (liveSettings && liveSettings.GeneralSettings) {
+                userCurrentSubdomain = liveSettings.GeneralSettings.subdomain;
+                console.log('[DEBUG] User current subdomain:', userCurrentSubdomain);
+            }
+        } catch (error) {
+            console.log('[DEBUG] No existing live site for user');
+        }
+
+        // If user is changing their subdomain, check if new subdomain is available
+        if (userCurrentSubdomain !== subdomain) {
+            const subdomainExists = await checkSubdomainModel({ subdomain });
+            
+            if (subdomainExists) {
+                console.log('[DEBUG] Subdomain already taken:', subdomain);
+                return res.status(409).json({
+                    status: 'error',
+                    message: 'Subdomain is already taken by another user. Please choose a different subdomain.'
+                });
+            }
+        }
+
+        // Publish the site (will overwrite if user already has a live site)
         await publishSiteSettingsModel({ email, subdomain, siteSettings });
 
         res.status(200).json({
             status: 'success',
-            message: 'Site settings published successfully',
+            message: userCurrentSubdomain 
+                ? 'Site settings updated successfully' 
+                : 'Site settings published successfully',
             data: {
                 email,
                 subdomain,

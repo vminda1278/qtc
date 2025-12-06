@@ -85,6 +85,9 @@ async function getDraftSiteSettingsModel({ email }) {
  * @param {Object} params.siteSettings - Site settings data to publish
  * @returns {Promise<Object>} - DynamoDB response
  * @throws {Error} If required parameters are missing or save fails
+ * 
+ * Schema: PK: LiveSites, SK: <email>, ATTR1: <subdomain>, ATTR2: <siteSettings>
+ * This ensures each email can only have ONE live site
  */
 async function publishSiteSettingsModel({ email, subdomain, siteSettings }) {
     try {
@@ -115,15 +118,15 @@ async function publishSiteSettingsModel({ email, subdomain, siteSettings }) {
             {
                 op: "add",
                 pk: "LiveSites",
-                sk: subdomain,
+                sk: email, // SK is now the email (ensures 1 site per user)
                 attr: {
-                    ATTR1: siteSettings,
-                    ATTR2: email // Store email for reference
+                    ATTR1: subdomain, // Store subdomain in ATTR1
+                    ATTR2: siteSettings // Store settings in ATTR2
                 }
             }
         ];
 
-        console.log('[DEBUG] Publishing to two locations:', JSON.stringify(transactItems, null, 2));
+        console.log('[DEBUG] Publishing to two locations (new schema - SK=email, ATTR1=subdomain):', JSON.stringify(transactItems, null, 2));
         
         const response = await transactWriteItems(transactItems);
         
@@ -176,6 +179,9 @@ async function getLiveSiteSettingsModel({ email }) {
  * Get site settings by subdomain (public lookup)
  * Subdomain is extracted from full domain (e.g., "brighttax" from "brighttax.qwiktax.in")
  * 
+ * New Schema: PK: LiveSites, SK: <email>, ATTR1: <subdomain>, ATTR2: <siteSettings>
+ * Since subdomain is now in ATTR1, we need to query with filter
+ * 
  * @param {Object} params - Function parameters
  * @param {string} params.subdomain - Subdomain name (e.g., "brighttax")
  * @returns {Promise<Object>} - Site settings data
@@ -187,21 +193,31 @@ async function getSiteSettingsBySubdomainModel({ subdomain }) {
             throw new Error("subdomain is required");
         }
 
+        const { queryItem } = require("../utility/db");
+
         const params = {
             pk: "LiveSites",
-            sk: subdomain
+            filter: "ATTR1 = :subdomain",
+            filterValues: {
+                ":subdomain": subdomain
+            }
         };
 
-        console.log('[DEBUG] Getting site settings by subdomain:', JSON.stringify(params, null, 2));
+        console.log('[DEBUG] Getting site settings by subdomain (new schema):', JSON.stringify(params, null, 2));
         
-        const response = await getItem(params);
+        const response = await queryItem(params);
         
-        if (!response.Item) {
+        if (!response.Items || response.Items.length === 0) {
+            console.log('[DEBUG] No site found for subdomain:', subdomain);
             return null;
         }
 
+        // Should only be one item since subdomain should be unique
+        const item = response.Items[0];
+        
         console.log('[DEBUG] Site settings retrieved successfully for subdomain:', subdomain);
-        return response.Item.ATTR1;
+        console.log('[DEBUG] Email owner:', item.SK);
+        return item.ATTR2; // ATTR2 now contains the site settings
 
     } catch (e) {
         console.error('Error in getSiteSettingsBySubdomainModel:', e);
@@ -211,6 +227,7 @@ async function getSiteSettingsBySubdomainModel({ subdomain }) {
 
 /**
  * Check if subdomain exists in LiveSites table
+ * New Schema: PK: LiveSites, SK: <email>, ATTR1: <subdomain>
  * 
  * @param {Object} params - Function parameters
  * @param {string} params.subdomain - Subdomain to check
@@ -223,19 +240,27 @@ async function checkSubdomainModel({ subdomain }) {
             throw new Error("subdomain is required");
         }
 
+        const { queryItem } = require("../utility/db");
+
         const params = {
             pk: "LiveSites",
-            sk: subdomain
+            filter: "ATTR1 = :subdomain",
+            filterValues: {
+                ":subdomain": subdomain
+            }
         };
 
-        console.log('[DEBUG] Checking subdomain existence:', JSON.stringify(params, null, 2));
+        console.log('[DEBUG] Checking subdomain existence (new schema):', JSON.stringify(params, null, 2));
         
-        const response = await getItem(params);
+        const response = await queryItem(params);
         
-        // If Item exists, subdomain is taken
-        const exists = !!response.Item;
+        // If any Items exist with this subdomain, it's taken
+        const exists = response.Items && response.Items.length > 0;
         
         console.log('[DEBUG] Subdomain check result - exists:', exists);
+        if (exists) {
+            console.log('[DEBUG] Subdomain owned by email:', response.Items[0].SK);
+        }
         return exists;
 
     } catch (e) {
