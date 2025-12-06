@@ -32,7 +32,6 @@ provider:
     # Stage and Region
     STAGE: ${self:provider.stage}
     # JWT Secret for OTP-based authentication
-    JWT_SECRET: ${env:JWT_SECRET}
     # Google OAuth Configuration (Client-side OAuth with backend token verification)
     GOOGLE_CLIENT_ID: ${self:custom.googleClientId.${self:provider.stage}}
     # S3 Bucket for assets
