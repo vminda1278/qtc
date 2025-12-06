@@ -86,7 +86,9 @@ async function getDraftSiteSettingsModel({ email }) {
  * @returns {Promise<Object>} - DynamoDB response
  * @throws {Error} If required parameters are missing or save fails
  * 
- * Schema: PK: LiveSites, SK: <email>, ATTR1: <subdomain>, ATTR2: <siteSettings>
+ * Schema:
+ * - Enterprise Record: PK: Enterprise:<email>, SK: SiteSettings:Live, ATTR1: <siteSettings>
+ * - LiveSites Record: PK: LiveSites, SK: <email>, ATTR1: <subdomain>
  * This ensures each email can only have ONE live site
  */
 async function publishSiteSettingsModel({ email, subdomain, siteSettings }) {
@@ -120,8 +122,7 @@ async function publishSiteSettingsModel({ email, subdomain, siteSettings }) {
                 pk: "LiveSites",
                 sk: email, // SK is now the email (ensures 1 site per user)
                 attr: {
-                    ATTR1: subdomain, // Store subdomain in ATTR1
-                    ATTR2: siteSettings // Store settings in ATTR2
+                    ATTR1: subdomain // Store subdomain in ATTR1 (settings stored in Enterprise record)
                 }
             }
         ];
@@ -179,8 +180,10 @@ async function getLiveSiteSettingsModel({ email }) {
  * Get site settings by subdomain (public lookup)
  * Subdomain is extracted from full domain (e.g., "brighttax" from "brighttax.qwiktax.in")
  * 
- * New Schema: PK: LiveSites, SK: <email>, ATTR1: <subdomain>, ATTR2: <siteSettings>
- * Since subdomain is now in ATTR1, we need to query with filter
+ * New Schema: PK: LiveSites, SK: <email>, ATTR1: <subdomain>
+ * Since subdomain is now in ATTR1, we need to:
+ * 1. Query LiveSites with filter to find the email
+ * 2. Get the site settings from Enterprise:<email> record
  * 
  * @param {Object} params - Function parameters
  * @param {string} params.subdomain - Subdomain name (e.g., "brighttax")
@@ -213,11 +216,27 @@ async function getSiteSettingsBySubdomainModel({ subdomain }) {
         }
 
         // Should only be one item since subdomain should be unique
-        const item = response.Items[0];
+        const liveSiteItem = response.Items[0];
+        const email = liveSiteItem.SK; // Email is stored in SK
+        
+        console.log('[DEBUG] Found subdomain owned by email:', email);
+        
+        // Now get the actual site settings from Enterprise record
+        const settingsParams = {
+            pk: `Enterprise:${email}`,
+            sk: "SiteSettings:Live"
+        };
+        
+        console.log('[DEBUG] Fetching site settings from Enterprise record');
+        const settingsResponse = await getItem(settingsParams);
+        
+        if (!settingsResponse.Item) {
+            console.log('[DEBUG] No live site settings found for email:', email);
+            return null;
+        }
         
         console.log('[DEBUG] Site settings retrieved successfully for subdomain:', subdomain);
-        console.log('[DEBUG] Email owner:', item.SK);
-        return item.ATTR2; // ATTR2 now contains the site settings
+        return settingsResponse.Item.ATTR1; // Site settings stored in ATTR1
 
     } catch (e) {
         console.error('Error in getSiteSettingsBySubdomainModel:', e);
