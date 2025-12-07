@@ -39,7 +39,7 @@ provider:
       Ref: S3AssetsBucket
     # Email Configuration
     DEFAULT_FROM_EMAIL: "QwikTax <hello@qwiktax.in>"
-    AWS_REGION: us-east-1
+    SES_REGION: us-east-1
     # Logging Configuration
     LOG_LEVEL: ${env:LOG_LEVEL, self:custom.logLevels.${self:provider.stage}, 'INFO'}
     SERVICE_NAME: qwiktax

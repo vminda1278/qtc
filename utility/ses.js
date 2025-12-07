@@ -1,8 +1,9 @@
 const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
 
 // Initialize SES client with region
+// Use SES_REGION if specified, otherwise use the Lambda's AWS_REGION, fallback to us-east-1
 const sesClient = new SESClient({
-  region: process.env.AWS_REGION || "us-east-1"
+  region: process.env.SES_REGION || process.env.AWS_REGION || "us-east-1"
 });
 
 const sendEmail = async (toAddress, subject, body, fromEmail = null) => {
