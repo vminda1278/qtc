@@ -288,11 +288,73 @@ async function checkSubdomainModel({ subdomain }) {
     }
 }
 
+/**
+ * Save a lead/inquiry from a public site
+ * 
+ * @param {Object} leadData - Lead data
+ * @param {string} leadData.name - Customer name
+ * @param {string} leadData.email - Customer email (of the customer)
+ * @param {string} leadData.mobile - Customer mobile
+ * @param {string} leadData.service - Service interested in
+ * @param {string} leadData.message - Customer message
+ * @param {string} leadData.subdomain - Site subdomain (for reference)
+ * @param {string} leadData.ownerEmail - Site owner's email (PK for leads)
+ * @param {string} leadData.submittedAt - Submission timestamp
+ * @returns {Promise<Object>} - DynamoDB response
+ */
+async function saveLeadModel(leadData) {
+    try {
+        const { name, email, mobile, service, message, subdomain, ownerEmail, submittedAt } = leadData;
+        
+        if (!name || !email || !mobile || !ownerEmail) {
+            throw new Error("name, email, mobile, and ownerEmail are required");
+        }
+
+        // Generate a unique lead ID based on timestamp
+        const leadId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const timestamp = submittedAt || new Date().toISOString();
+
+        // Store all lead details in a single JSON structure
+        const leadDetails = {
+            leadId,
+            customerName: name,
+            customerEmail: email,
+            customerMobile: mobile,
+            service: service || 'General Inquiry',
+            message: message || '',
+            status: 'new', // Status: new, contacted, converted, closed
+            submittedAt: timestamp,
+            subdomain: subdomain || '', // Keep subdomain for reference
+            source: `${subdomain}.qwiktax.in` // Track which site the lead came from
+        };
+
+        const params = {
+            pk: `Leads:${ownerEmail}`,
+            sk: `Lead:${timestamp}:${leadId}`,
+            attr: {
+                ATTR1: leadDetails
+            }
+        };
+
+        console.log('[DEBUG] Saving lead for owner:', ownerEmail, JSON.stringify(params, null, 2));
+        
+        const response = await putItem(params);
+        
+        console.log('[DEBUG] Lead saved successfully for owner:', ownerEmail);
+        return response;
+
+    } catch (e) {
+        console.error('Error in saveLeadModel:', e);
+        throw new Error(e.message || 'Failed to save lead');
+    }
+}
+
 module.exports = {
     saveDraftSiteSettingsModel,
     getDraftSiteSettingsModel,
     publishSiteSettingsModel,
     getLiveSiteSettingsModel,
     getSiteSettingsBySubdomainModel,
-    checkSubdomainModel
+    checkSubdomainModel,
+    saveLeadModel
 };

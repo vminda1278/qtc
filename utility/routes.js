@@ -35,6 +35,7 @@ superadminRouter.get('/getAllEnterprises', superadminController.getAllEnterprise
 
 // Public routes (unauthenticated)
 publicRouter.get('/site/:subdomain', publicController.getSiteBySubdomain);
+publicRouter.post('/lead', publicController.submitLead);
 
 // Upload routes (authenticated - add JWT middleware if needed)
 uploadRouter.post('/image', uploadController.upload.single('image'), uploadController.uploadImage);
