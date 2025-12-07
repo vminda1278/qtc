@@ -96,6 +96,7 @@ async function submitLead(req, res) {
         };
 
         await adminModel.saveLeadModel(leadData);
+        console.log('[DEBUG] Lead saved to database successfully');
 
         // Send email notification to site owner
         const { sendEmail } = require('../utility/ses');
@@ -128,9 +129,19 @@ async function submitLead(req, res) {
             </html>
         `;
 
-        await sendEmail(ownerEmail, emailSubject, emailBody);
-
-        console.log('[DEBUG] Lead saved and email sent successfully');
+        try {
+            // Use firm-specific email as sender: subdomain@qwiktax.in
+            const fromEmail = `${firmName} <${subdomain}@qwiktax.in>`;
+            await sendEmail(ownerEmail, emailSubject, emailBody, fromEmail);
+            console.log('[DEBUG] ✅ Lead saved and email notification sent successfully');
+            console.log('[DEBUG] From:', fromEmail);
+            console.log('[DEBUG] To:', ownerEmail);
+        } catch (emailError) {
+            // Log email error but don't fail the request - lead is already saved
+            console.error('[DEBUG] ⚠️ Lead saved but failed to send email notification:', emailError.message);
+            console.error('[DEBUG] Owner email:', ownerEmail);
+            // Continue - we still want to return success since the lead was saved
+        }
 
         return res.status(200).json({
             success: true,

@@ -24,22 +24,42 @@ app.use((req, res, next) => {
     next();
 });
 
-// Configure CORS to allow frontend connection (similar to ezc)
+// Configure CORS to allow frontend connection
+// Allow all qwiktax.in subdomains for CA firm sites + admin domains
 app.use(cors({
-    origin: [
-        'https://admin.qwiktax.in',
-        'https://qwiktax.in',
-        'https://admin.dev.qwiktax.in',
-        'https://dev.qwiktax.in',
-        'https://admin.staging.qwiktax.in',
-        'https://staging.qwiktax.in',
-        'https://admin.test.qwiktax.in',
-        'https://test.qwiktax.in',
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3001'
-    ],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, etc.)
+        if (!origin) return callback(null, true);
+        
+        // List of allowed origins
+        const allowedOrigins = [
+            'https://admin.qwiktax.in',
+            'https://qwiktax.in',
+            'https://admin.dev.qwiktax.in',
+            'https://dev.qwiktax.in',
+            'https://admin.staging.qwiktax.in',
+            'https://staging.qwiktax.in',
+            'https://admin.test.qwiktax.in',
+            'https://test.qwiktax.in',
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3001'
+        ];
+        
+        // Check if origin is in allowed list
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        
+        // Allow all *.qwiktax.in subdomains (for CA firm sites)
+        if (origin.match(/^https:\/\/([a-z0-9-]+\.)?qwiktax\.in$/)) {
+            return callback(null, true);
+        }
+        
+        // Reject other origins
+        callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token']
